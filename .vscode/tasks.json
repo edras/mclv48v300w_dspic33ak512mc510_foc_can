@@ -9,7 +9,7 @@
                 "-p",
                 "AUTO",
                 "-e",
-                "${workspaceFolder}/out/AK512_FOC_T1S/default.elf"
+                "${workspaceFolder}/out/AK512_FOC_CAN/default.elf"
             ],
             "presentation": {
                 "reveal": "always",

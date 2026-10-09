@@ -2,11 +2,11 @@
 
 # Pinout Description — dsPIC33AK512MC510
 
-**Pin and peripheral assignment reference for the MCLV-48V-300W + T1S FOC project**
+**Pin and peripheral assignment reference for the MCLV-48V-300W + CAN FOC project**
 
 ![Device](https://img.shields.io/badge/device-dsPIC33AK512MC510-blue)
 ![Board](https://img.shields.io/badge/board-MCLV--48V--300W-blue)
-![Updated](https://img.shields.io/badge/updated-2026--07--31-informational)
+![Updated](https://img.shields.io/badge/updated-2026--10--09-informational)
 
 ---
 
@@ -33,9 +33,9 @@
 | `HALL_A` | **RD4** | Input | Hall sensor phase A |
 | `HALL_B` | **RD5** | Input | Hall sensor phase B |
 | `HALL_C` | **RD6** | Input | Hall sensor phase C |
-| `XPRO1_CS` | **RA14** | Output | T1S LAN865x SPI chip select |
-| `XPRO1_INT` | **RB3** | Input | T1S LAN865x IRQ (IOC falling edge) |
-| `XPRO1_RST` | **RG0** | Output | T1S LAN865x hardware reset |
+| `FLT_OC` | **RD7** | Input | Board overcurrent fault signal |
+| `FLT_OC_OV` | **RD8** | Input | Board overcurrent/overvoltage fault signal |
+| `FLT_LATCH` | **RE0** | Input | Board fault latch |
 
 > Defined in: `mcc_generated_files/system/pins.h`
 
@@ -147,25 +147,25 @@ Three high-speed PWM generators drive the 3-phase inverter in **complementary ce
 
 > Defined in: `mcc_generated_files/uart/src/uart1.c`
 
-### SPI1 (PPS-assigned) — T1S LAN865x
+### CAN1 (PPS-assigned) — X2Cscope
 
-| Signal | PPS Pin | Port | Direction |
-|--------|---------|------|-----------|
-| SCK (clock) | RP14 | **RA13** | Output |
-| SDO (MOSI) | RP16 | **RA15** | Output |
-| SDI (MISO) | RP69 | **RE4** | Input |
-| CS (GPIO) | — | **RA14** (`XPRO1_CS`) | Output |
+| Signal | PPS Pin | Port | Direction | PPS Register |
+|--------|---------|------|-----------|--------------|
+| CAN1TX | RP44 | **RC11** | Output | `RPOR10bits.RP44R = 0x11` |
+| CAN1RX | RP43 | **RC10** | Input | `RPINR17bits.CAN1RXR = 0x2B` |
 
-Mode 0, 20 MHz. DMA channel 0 (TX) and DMA channel 1 (RX).
+Classic CAN 2.0, 500 kbit/s, standard 11-bit IDs, no BRS. Device -> PC ID `0x100` (TXQ), PC -> Device ID `0x110` (hardware filter 0 -> FIFO1 `X2CSCOPE_RX`).
 
-> Defined in: `mcc_generated_files/spi_host/src/spi1.c`
+RC11/RC10 are routed to the **XPRO1** header, where an **ATA6563 click** (MIKROE-2334) is attached through an Xplained Pro extension. The click needs 5 V in addition to 3.3 V: since XPRO1 only provides 3.3 V, 5 V is taken from the 5V pin of header **J5** and connected with a jumper wire to **5V_EXT** on the Xplained Pro extension.
 
-### I2C3 (Fixed silicon pins)
+### Clock Input
 
-~400 kHz (`I2C3HBRG = I2C3LBRG = 0x66` at 100 MHz peripheral clock).  
-SCL and SDA are dedicated, non-PPS-remappable pins on the dsPIC33AK512MC510.
+| Signal | Pin | Source |
+|--------|-----|--------|
+| OSCI | OSCI | 8 MHz MEMS oscillator (Y1) on the DIM module — External Clock, PLL1 reference (required for CAN timing accuracy) |
 
-> Defined in: `mcc_generated_files/i2c_host/src/i2c3.c`
+> PPS defined in: `mcc_generated_files/system/src/pins.c`  
+> CAN driver: `mcc_generated_files/can/src/can1.c`
 
 ---
 
@@ -175,11 +175,11 @@ Bits set to `1` in ANSEL configure the corresponding port pin as analog (disconn
 
 | Register | Value | Analog-mode pins |
 |---|---|---|
-| `ANSELA` | `0x0FFF` | RA0–RA11 |
-| `ANSELB` | `0xFFF7` | RB0–RB15 except **RB3** (kept digital for `XPRO1_INT` IOC) |
-| `ANSELC` | `0x3F27` | RC0–RC2, RC5, RC8–RC13 |
-| `ANSELD` | `0xFF80` | RD7–RD15 |
-| `ANSELE` | `0x0001` | RE0 |
+| `ANSELA` | `0xEFFF` | RA0–RA11, RA13–RA15 (RA12 digital for SW1) |
+| `ANSELB` | `0xFFFF` | RB0–RB15 |
+| `ANSELC` | `0x33E5` | RC0, RC2, RC5–RC9, RC12–RC13 (RC10/RC11 digital for CAN1) |
+| `ANSELD` | `0xFE00` | RD9–RD15 |
+| `ANSELE` | `0x0000` | none |
 | `ANSELF` | `0x0001` | RF0 |
 
 > Defined in: `mcc_generated_files/system/src/pins.c`
@@ -190,8 +190,9 @@ Bits set to `1` in ANSEL configure the corresponding port pin as analog (disconn
 
 | File | Content |
 |------|---------|
-| `mcc_generated_files/system/src/pins.c` | TRIS, LAT, ANSEL, PPS, IOC register initialization |
-| `mcc_generated_files/system/pins.h` | Named GPIO macros (SW1, SW2, LED1, LED2, HALL_A/B/C, XPRO1_*) |
+| `mcc_generated_files/system/src/pins.c` | TRIS, LAT, ANSEL, PPS (UART1, CAN1) initialization |
+| `mcc_generated_files/system/pins.h` | Named GPIO macros (SW1, SW2, LED1, LED2, HALL_A/B/C, FLT_*) |
+| `mcc_generated_files/system/src/clock.c` | External 8 MHz clock, PLL1, clock generators (CLK10 = 20 MHz CAN clock) |
 | `mcc_generated_files/adc/src/adc1.c` | ADC1: IA=AD1AN0, VM1=AD1AN3, VM2=AD1AN4 |
 | `mcc_generated_files/adc/src/adc2.c` | ADC2: IB=AD2AN0, VM3=AD2AN4, POT=AD2AN5 (interrupt enabled) |
 | `mcc_generated_files/adc/src/adc3.c` | ADC3: IBUS=AD3AN0, IC=AD3AN3, VBUS=AD3AN4 |
@@ -201,10 +202,8 @@ Bits set to `1` in ANSEL configure the corresponding port pin as analog (disconn
 | `mcc_generated_files/opa/src/opa1.c` | OPA1 (Phase A shunt amplifier) |
 | `mcc_generated_files/opa/src/opa2.c` | OPA2 (Phase B shunt amplifier) |
 | `mcc_generated_files/opa/src/opa3.c` | OPA3 (Phase C shunt amplifier) |
-| `mcc_generated_files/spi_host/src/spi1.c` | SPI1: Mode 0, 20 MHz, DMA-backed |
+| `mcc_generated_files/can/src/can1.c` | CAN1: 500 kbit/s, TXQ, FIFO1 `X2CSCOPE_RX`, filter 0 (reprogrammed by `X2CscopeComm.c`) |
 | `mcc_generated_files/uart/src/uart1.c` | UART1: 115200 baud, 8N1 |
-| `mcc_generated_files/i2c_host/src/i2c3.c` | I2C3: ~400 kHz |
-| `mcc_generated_files/dma/src/dma.c` | DMA0 = SPI1 TX, DMA1 = SPI1 RX |
 
 ---
 

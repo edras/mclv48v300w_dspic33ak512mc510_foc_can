@@ -6,14 +6,14 @@
   "configurations": [
     {
       // Note: Properties here can override MPLAB project settings
-      "name": "Launch AK512_FOC_T1S: default",
+      "name": "Launch AK512_FOC_CAN: default",
       "type": "mplab-core-da",
       "request": "launch",
-      "project": "AK512_FOC_T1S",
+      "project": "AK512_FOC_CAN",
       "configuration": "default",
       "stopOnEntry": true,
-      "preLaunchTask": "AK512_FOC_T1S: default - Build",
-      "program": "${workspaceFolder}/out/AK512_FOC_T1S/default.elf"
+      "preLaunchTask": "AK512_FOC_CAN: default - Build",
+      "program": "${workspaceFolder}/out/AK512_FOC_CAN/default.elf"
     }
   ]
 }

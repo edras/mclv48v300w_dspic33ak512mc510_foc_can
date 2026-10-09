@@ -1,0 +1,138 @@
+/**
+ * PINS Generated Driver Source File 
+ * 
+ * @file      pins.c
+ *            
+ * @ingroup   pinsdriver
+ *            
+ * @brief     This is the generated driver source file for PINS driver.
+ *
+ * @skipline @version   PLIB Version 1.0.2
+ *
+ * @skipline  Device : dsPIC33AK512MC510
+*/
+
+/*
+© [2026] Microchip Technology Inc. and its subsidiaries.
+
+    Subject to your compliance with these terms, you may use Microchip 
+    software and any derivatives exclusively with Microchip products. 
+    You are responsible for complying with 3rd party license terms  
+    applicable to your use of 3rd party software (including open source  
+    software) that may accompany Microchip software. SOFTWARE IS ?AS IS.? 
+    NO WARRANTIES, WHETHER EXPRESS, IMPLIED OR STATUTORY, APPLY TO THIS 
+    SOFTWARE, INCLUDING ANY IMPLIED WARRANTIES OF NON-INFRINGEMENT,  
+    MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT 
+    WILL MICROCHIP BE LIABLE FOR ANY INDIRECT, SPECIAL, PUNITIVE, 
+    INCIDENTAL OR CONSEQUENTIAL LOSS, DAMAGE, COST OR EXPENSE OF ANY 
+    KIND WHATSOEVER RELATED TO THE SOFTWARE, HOWEVER CAUSED, EVEN IF 
+    MICROCHIP HAS BEEN ADVISED OF THE POSSIBILITY OR THE DAMAGES ARE 
+    FORESEEABLE. TO THE FULLEST EXTENT ALLOWED BY LAW, MICROCHIP?S 
+    TOTAL LIABILITY ON ALL CLAIMS RELATED TO THE SOFTWARE WILL NOT 
+    EXCEED AMOUNT OF FEES, IF ANY, YOU PAID DIRECTLY TO MICROCHIP FOR 
+    THIS SOFTWARE.
+*/
+
+// Section: Includes
+#include <xc.h>
+#include <stddef.h>
+#include "../pins.h"
+
+// Section: File specific functions
+
+/**
+ * @ingroup  pinsdriver
+ * @brief    Locks all the Peripheral Remapping registers and cannot be written.
+ * @return   none  
+ */
+#define PINS_PPSLock()           (RPCONbits.IOLOCK = 1)
+
+/**
+ * @ingroup  pinsdriver
+ * @brief    Unlocks all the Peripheral Remapping registers and can be written.
+ * @return   none  
+ */
+#define PINS_PPSUnlock()         (RPCONbits.IOLOCK = 0)
+
+// Section: Driver Interface Function Definitions
+void PINS_Initialize(void)
+{
+    /****************************************************************************
+     * Setting the Output Latch SFR(s)
+     ***************************************************************************/
+    LATA = 0x0000UL;
+    LATB = 0x0000UL;
+    LATC = 0x8000UL;
+    LATD = 0x0000UL;
+    LATE = 0x0000UL;
+    LATF = 0x0000UL;
+    LATG = 0x0000UL;
+
+    /****************************************************************************
+     * Setting the GPIO Direction SFR(s)
+     ***************************************************************************/
+    TRISA = 0xFFDBUL;
+    TRISB = 0xFFFEUL;
+    TRISC = 0x77E7UL;
+    TRISD = 0xFFF0UL;
+    TRISE = 0x0013UL;
+    TRISF = 0x000FUL;
+    TRISG = 0x0007UL;
+
+
+    /****************************************************************************
+     * Setting the Weak Pull Up and Weak Pull Down SFR(s)
+     ***************************************************************************/
+    CNPUA = 0x0000UL;
+    CNPUB = 0x0000UL;
+    CNPUC = 0x0000UL;
+    CNPUD = 0x0000UL;
+    CNPUE = 0x0000UL;
+    CNPUF = 0x0000UL;
+    CNPUG = 0x0000UL;
+    CNPDA = 0x0000UL;
+    CNPDB = 0x0000UL;
+    CNPDC = 0x0000UL;
+    CNPDD = 0x0000UL;
+    CNPDE = 0x0000UL;
+    CNPDF = 0x0000UL;
+    CNPDG = 0x0000UL;
+
+
+    /****************************************************************************
+     * Setting the Open Drain SFR(s)
+     ***************************************************************************/
+    ODCA = 0x0000UL;
+    ODCB = 0x0000UL;
+    ODCC = 0x0000UL;
+    ODCD = 0x0000UL;
+    ODCE = 0x0000UL;
+    ODCF = 0x0000UL;
+    ODCG = 0x0000UL;
+
+
+    /****************************************************************************
+     * Setting the Analog/Digital Configuration SFR(s)
+     ***************************************************************************/
+    ANSELA = 0xEFFFUL;
+    ANSELB = 0xFFFFUL;
+    ANSELC = 0x33E5UL;
+    ANSELD = 0xFE00UL;
+    ANSELE = 0x0000UL;
+    ANSELF = 0x0001UL;
+
+    /****************************************************************************
+     * Set the PPS
+     ***************************************************************************/
+      PINS_PPSUnlock(); // unlock PPS
+
+        RPINR13bits.U1RXR = 0x002FUL; //RC14->UART1:U1RX;
+        RPINR17bits.CAN1RXR = 0x002BUL; //RC10->CAN1:CAN1RX;
+        RPOR11bits.RP48R = 0x0013UL;  //RC15->UART1:U1TX;
+        RPOR10bits.RP44R = 0x0011UL;  //RC11->CAN1:CAN1TX;
+
+      PINS_PPSLock(); // lock PPS
+
+
+}
+

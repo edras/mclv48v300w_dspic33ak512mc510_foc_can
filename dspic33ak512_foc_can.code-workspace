@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"mplab.clangd.arguments": [
+			"--header-insertion=never"
+		],
+		"mplab.clangd.compileCommandsDir": "${workspaceFolder}\\_build\\AK512_FOC_CAN\\default",
+		"memory-inspector.debugTypes": [
+			"arm-debugger",
+			"embedded-debug",
+			"gdb",
+			"mplab-core-da"
+		],
+		"mplab.clangd.path": "c:\\Program Files\\Microchip\\xc-dsc\\v3.31.01\\bin\\xc-dsc-clangd.exe"
+	}
+}

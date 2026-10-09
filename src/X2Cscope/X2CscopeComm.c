@@ -46,115 +46,249 @@ Copyright (c) [2012-2020] Microchip Technology Inc.
  * $LastChangedDate:: 2024-09-13 13:00:00 +0200#$
  */
 /**
- * This file implements the X2C Lin protocol connection with MCC Peripheral drivers.
+ * X2Cscope communication layer over CAN 2.0 (MCC Melody CAN1 driver).
+ *
+ * Based on X2Cscope_library interface/examples/can.
+ *
+ * Framing:
+ *   X2Cscope uses a byte-stream protocol (LNet). CAN carries frames of up to
+ *   8 bytes, so sendSerial() collects bytes and sends a full 8-byte frame every
+ *   8 bytes. flushSerial() sends whatever is left at the end of each LNet frame.
+ *   Received CAN frames are copied into a software ring buffer by
+ *   X2CscopeComm_Communicate(); receiveSerial() drains it byte by byte.
+ *
+ * CAN IDs (standard 11-bit, classic CAN, no BRS):
+ *   Device -> PC : X2CSCOPE_CAN_TX_ID (0x100)
+ *   PC -> Device : X2CSCOPE_CAN_RX_ID (0x110)
+ *
+ * MCC requirements:
+ *   - CAN1 RX FIFO with custom name X2CSCOPE_RX (checked at compile time).
+ *   - Filter 0 routed to that FIFO. Its ID/mask are overwritten at post-init
+ *     from X2CSCOPE_CAN_RX_ID, so this file is the single source of truth.
+ *     Do not use filter 0 for anything else.
+ *   - Hardware filtering guarantees X2CSCOPE_RX only holds X2CSCOPE_CAN_RX_ID
+ *     frames, so no software ID check is done on reception.
+ *
+ * Usage: call X2CscopeComm_Communicate() from the main loop (instead of
+ * X2Cscope_Communicate()) and X2Cscope_Update() from the fixed-rate ISR.
  */
-#include "X2CscopeComm.h"
-#include "T1S/tcp_server.h"
-
 #include <stdint.h>
+#include <stdbool.h>
 
-/* function prototypes */
-void receiveTcpData(void* tcp_server_cfg, const uint8_t* data, uint16_t len);
+#include "X2CscopeComm.h"
+#include "mcc_generated_files/can/can1.h"
+#include "mcc_generated_files/can/can_types.h"
 
-#define TCP_RX_BUFSIZE 256
+#include <xc.h>
 
-/* TCP server configuration */
-TCP_Server x2cscope_tcp_server = {
-    .port = 12666,
-    .listen_pcb = NULL,
-    .conn_pcb = NULL,
-    .recv_fn = receiveTcpData
-};
+/* MCC must provide an RX FIFO with custom name X2CSCOPE_RX */
+#ifndef X2CSCOPE_RX
+#error "X2Cscope: CAN1 RX FIFO custom name 'X2CSCOPE_RX' not found in can1.h - set it in MCC (CAN1 > FIFO custom name)"
+#endif
 
-/* Circular buffer to receive data from TCP server */
-typedef struct {
-    uint8_t buf[TCP_RX_BUFSIZE];
-    volatile uint16_t head, tail;
-} TCP_CircularBuffer;
+/* CAN IDs used by X2Cscope (standard 11-bit). Single point of definition:
+ * the RX acceptance filter is programmed from X2CSCOPE_CAN_RX_ID in
+ * X2CscopeComm_PostInit(), so the MCC filter ID value is not relevant. */
+#ifndef X2CSCOPE_CAN_TX_ID
+#define X2CSCOPE_CAN_TX_ID  (0x100UL)   /* device -> PC (X2Cscope tool RX) */
+#endif
+#ifndef X2CSCOPE_CAN_RX_ID
+#define X2CSCOPE_CAN_RX_ID  (0x110UL)   /* PC -> device (X2Cscope tool TX) */
+#endif
 
-static TCP_CircularBuffer tcp_rx_buf = {0};
+#if (X2CSCOPE_CAN_RX_ID > 0x7FFUL) || (X2CSCOPE_CAN_TX_ID > 0x7FFUL)
+#error "X2Cscope: CAN IDs must be standard 11-bit IDs (<= 0x7FF)"
+#endif
 
-/* Transmit buffer for TCP server */
-static uint8_t tcp_tx_buf[516] = {0}; // max LNET frame size with fill bytes
-static uint16_t tx_head = 0;
+/* -------------------------------------------------------------------------
+ * RX ring buffer (power of 2, 8-bit indices wrap naturally).
+ * Filled by X2CscopeComm_Communicate(), drained by receiveSerial().
+ * ------------------------------------------------------------------------- */
+#define RING_BITS   7u
+#define RING_SZ     (1u << RING_BITS)   /* 128 bytes */
+#define RING_MASK   (RING_SZ - 1u)
 
-void receiveTcpData(void* tcp_server_cfg, const uint8_t* data, uint16_t len)
+static volatile uint8_t rx_buf[RING_SZ];
+static volatile uint8_t rx_head;        /* write index */
+static volatile uint8_t rx_tail;        /* read  index */
+
+/* -------------------------------------------------------------------------
+ * TX accumulation buffer: one CAN frame worth of data.
+ * ------------------------------------------------------------------------- */
+#define CAN_MAX_DLC  8u
+
+static uint8_t tx_buf[CAN_MAX_DLC];
+static uint8_t tx_idx;
+
+/* -------------------------------------------------------------------------
+ * Internal helpers
+ * ------------------------------------------------------------------------- */
+static void ringbuf_reset(void)
 {
-    for (uint16_t i = 0; i < len; i++)
-    {
-        uint16_t next_head = (tcp_rx_buf.head + 1) % TCP_RX_BUFSIZE;
-        if (next_head != tcp_rx_buf.tail)
-        {
-            tcp_rx_buf.buf[tcp_rx_buf.head] = data[i];
-            tcp_rx_buf.head = next_head;
-        }
-    }
+    rx_head = 0u;
+    rx_tail = 0u;
 }
 
-void X2CscopeComm_PostInit(void)
+static uint8_t ringbuf_used(void)
 {
-    tcp_server_start(&x2cscope_tcp_server);
+    return (uint8_t)(rx_head - rx_tail);
 }
 
-/** 
-  @brief
-    Puts the data to the hardware layer. (UART)
-   @param[in] serial Serial interface object. (Not used)
-   @param[in] data Data to send 
+static uint8_t ringbuf_free(void)
+{
+    return (uint8_t)(RING_SZ - ringbuf_used());
+}
+
+static void ringbuf_push(uint8_t byte)
+{
+    rx_buf[rx_head & RING_MASK] = byte;
+    rx_head++;
+}
+
+static uint8_t ringbuf_pop(void)
+{
+    uint8_t byte = rx_buf[rx_tail & RING_MASK];
+    rx_tail++;
+    return byte;
+}
+
+static void can_transmit_frame(uint8_t len)
+{
+    struct CAN_MSG_OBJ msg = {0};
+    uint8_t i;
+
+    msg.msgId            = X2CSCOPE_CAN_TX_ID;
+    msg.field.formatType = CAN_2_0_FORMAT;
+    msg.field.brs        = CAN_NON_BRS_MODE;
+    msg.field.frameType  = CAN_FRAME_DATA;
+    msg.field.idType     = CAN_FRAME_STD;
+    msg.field.dlc        = len;
+    msg.data             = tx_buf;
+
+    (void)CAN1_Transmit(CAN1_TXQ, &msg);
+
+    for (i = 0u; i < CAN_MAX_DLC; i++) { tx_buf[i] = 0xFFu; }
+}
+
+/* -------------------------------------------------------------------------
+ * X2Cscope communication callbacks
+ * ------------------------------------------------------------------------- */
+
+/**
+ * @brief Accumulate one byte; a full 8-byte CAN frame is sent every 8 bytes.
  */
 void sendSerial(uint8_t data)
 {
-    tcp_tx_buf[tx_head++] = data;
-}
+    tx_buf[tx_idx & (CAN_MAX_DLC - 1u)] = data;
 
-/** 
-  @brief
-   Get serial data from hardware. Reset the hardware in case of error. (UART2)
-  @param[in] serial Serial interface object. (Not used)
-  @return
-    Return with the received data
- */
-uint8_t receiveSerial()
-{
-    if (tcp_rx_buf.head == tcp_rx_buf.tail)
+    if ((tx_idx & (CAN_MAX_DLC - 1u)) == (CAN_MAX_DLC - 1u))
     {
-        return 0; // No data available
+        can_transmit_frame(CAN_MAX_DLC);
     }
-    uint8_t data = tcp_rx_buf.buf[tcp_rx_buf.tail];
-    tcp_rx_buf.tail = (tcp_rx_buf.tail + 1) % TCP_RX_BUFSIZE;
-    return data;
+
+    tx_idx++;
 }
 
-/** 
-  @brief  Check data availability (UART).
-  @param[in] serial Serial interface object. (Not used)
-  @return
-    True -> Serial data ready to read.
-    False -> No data.
+/**
+ * @brief Return one byte from the RX ring buffer.
  */
-bool isReceiveDataAvailable()
+uint8_t receiveSerial(void)
 {
-    return (tcp_rx_buf.head != tcp_rx_buf.tail);
+    return ringbuf_pop();
 }
 
-/** 
-  @brief
-   Check output buffer. (UART)
-  @param[in] serial Serial interface object. (Not used)
-  @return    
-    True -> Transmit buffer is not full, at least one more character can be written.
-    False -> Transmit buffer is full.
+/**
+ * @brief true if at least one received byte is waiting.
  */
-bool isSendReady()
+bool isReceiveDataAvailable(void)
 {
-    return 1; // Always ready in TCP case
+    return (ringbuf_used() != 0u);
 }
 
+/**
+ * @brief true if the CAN TX queue can accept a new frame.
+ */
+bool isSendReady(void)
+{
+    return (CAN_TX_FIFO_AVAILABLE == CAN1_TransmitFIFOStatusGet(CAN1_TXQ));
+}
+
+/**
+ * @brief Send remaining bytes as a partial frame at the end of an LNet frame.
+ */
 void flushSerial(void)
 {
-    tcp_server_send(&x2cscope_tcp_server, tcp_tx_buf, tx_head);
-    tx_head = 0;
+    uint8_t remainder = tx_idx & (CAN_MAX_DLC - 1u);
+
+    if (remainder != 0u)
+    {
+        can_transmit_frame(remainder);
+    }
+
+    tx_idx = 0u;
 }
+
+/**
+ * @brief Drain the X2CSCOPE_RX FIFO into the ring buffer, then run the
+ *        X2Cscope protocol engine. Call from the main loop.
+ *
+ * The hardware filter only lets X2CSCOPE_CAN_RX_ID into X2CSCOPE_RX, so every
+ * frame is X2Cscope data. Frames are only taken while the ring buffer has room
+ * for a full frame; the rest stay in the CAN FIFO until the next call.
+ */
+void X2CscopeComm_Communicate(void)
+{
+    struct CAN_MSG_OBJ rx_msg;
+    uint8_t i;
+
+    while ((ringbuf_free() >= CAN_MAX_DLC) && CAN1_ReceiveMessageGet(X2CSCOPE_RX, &rx_msg))
+    {
+        for (i = 0u; i < (uint8_t)rx_msg.field.dlc; i++)
+        {
+            ringbuf_push(rx_msg.data[i]);
+        }
+    }
+
+    X2Cscope_Communicate();
+}
+
+/**
+ * @brief Program CAN1 acceptance filter 0 to accept only X2CSCOPE_CAN_RX_ID
+ *        (standard ID, exact match) into X2CSCOPE_RX.
+ *
+ * Filter registers may be written while the module is running, provided the
+ * filter is disabled (FLTEN0 = 0) during the update. This overrides whatever
+ * MCC configured for filter 0.
+ */
+static void can_rx_filter_config(void)
+{
+    C1FLTCON0bits.FLTEN0 = 0U;                      /* disable filter while updating */
+
+    C1FLTOBJ0 = 0UL;
+    C1FLTOBJ0bits.SID   = (uint16_t)(X2CSCOPE_CAN_RX_ID & 0x7FFUL);
+    C1FLTOBJ0bits.EXIDE = 0U;                       /* standard frame */
+
+    C1MASK0 = 0UL;
+    C1MASK0bits.MSID = 0x7FFU;                      /* compare all 11 SID bits */
+    C1MASK0bits.MIDE = 1U;                          /* match only standard IDs */
+
+    C1FLTCON0bits.F0BP   = (uint8_t)X2CSCOPE_RX;
+    C1FLTCON0bits.FLTEN0 = 1U;                      /* enable filter */
+}
+
+/**
+ * @brief Comm-layer post-init, called from X2Cscope_Init().
+ */
+void X2CscopeComm_PostInit(void)
+{
+    uint8_t i;
+
+    can_rx_filter_config();
+    ringbuf_reset();
+    tx_idx = 0u;
+    for (i = 0u; i < CAN_MAX_DLC; i++) { tx_buf[i] = 0xFFu; }
+}
+
 /* *****************************************************************************
  End of File
  */

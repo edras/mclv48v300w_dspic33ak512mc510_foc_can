@@ -78,6 +78,8 @@ void X2Cscope_Init(void); // Init X2Cscope and hook communication interfaces.
 /* Below functions are implemented in X2Cscope library */
 void X2Cscope_Communicate(void); // Communicate with X2Cscope GUI on PC side (Call in idle loop)
 void X2Cscope_Update(void); // Sample point of scope functionality (Call with fixed periods)
+/* Implemented in X2CscopeComm.c (CAN transport) */
+void X2CscopeComm_Communicate(void); // Drain CAN RX FIFO + X2Cscope_Communicate() (Call in idle loop)
 
 #ifdef __cplusplus
 }

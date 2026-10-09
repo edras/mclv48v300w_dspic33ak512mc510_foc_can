@@ -1,6 +1,6 @@
 # MCC Melody Peripheral Configuration
 
-All peripherals are configured using **MPLAB Code Configurator (MCC) Melody**. The MCC project file is located at `dsPIC33AK512MC510_MCLV48V300W_T1S/mcc/dspic33ak512_t1s.mc3`. Generated driver source files are in `dsPIC33AK512MC510_MCLV48V300W_T1S/mcc_generated_files/` and should never be edited manually — regenerate from MCC instead.
+All peripherals are configured using **MPLAB Code Configurator (MCC) Melody**. The MCC project file is located at `dsPIC33AK512MC510_MCLV48V300W_CAN/mcc/dspic33ak512_can.mc3`. Generated driver source files are in `dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/` and should never be edited manually — regenerate from MCC instead.
 
 <img src="assets/MCC/mcc_resources.png" alt="MCC Project Resources" title="All resources included in the MCC project" width="30%">
 
@@ -8,9 +8,9 @@ All peripherals are configured using **MPLAB Code Configurator (MCC) Melody**. T
 
 ### Pin Manager
 
-Pin assignments for motor control signals, Hall sensor inputs (RD4/RD5/RD6 — configured but not used by the sensorless FOC), user buttons (RA12/RB6), LEDs, and communication interfaces (SPI1, I2C3, UART1).
+Pin assignments for motor control signals, Hall sensor inputs (RD4/RD5/RD6 — configured but not used by the sensorless FOC), user buttons (SW1 = RA12, SW2 = RE1), LEDs, and communication interfaces (CAN1, UART1). CAN1 uses PPS: CAN1TX on RC11 (RP44), CAN1RX on RC10 (RP43).
 
-<img src="assets/MCC/pin_manager.png" alt="Pin Manager" title="MCC Pin Manager configuration" width="40%">
+<img src="assets/MCC/pin_manager.png" alt="Pin Manager" title="MCC Pin Manager configuration" width="80%">
 
 ### PWM (PG1 / PG2 / PG3)
 
@@ -56,9 +56,23 @@ On-chip operational amplifiers configured for current sense signal conditioning.
 
 ### Clock Configuration
 
-External Input Clock Source is **None**. System clock: 200 MHz FCY. Peripheral clock: 200 MHz (Fp). PWM clock: 400 MHz.
+System clock: 200 MHz FCY. Peripheral clock: 200 MHz (Fp). PWM clock: 400 MHz. CAN clock: 20 MHz.
 
-<img src="assets/MCC/clock_pll.png" alt="Clock PLL" title="MCC Clock PLL configuration" width="50%">
+#### External Clock Source
+
+CAN requires an accurate and stable clock, which the internal FRC oscillator cannot guarantee. The dsPIC33AK512MC510 DIM module has an **8 MHz MEMS oscillator (Y1)** connected to **OSCI**, so the External Input Clock Source is set to **External Clock** at 8 MHz. Reference Input1 and Reference Input2 are also set to 8 MHz.
+
+<img src="assets/MCC/clock_external.png" alt="External Clock" title="MCC External Input Clock Source - 8 MHz MEMS oscillator (Y1)" width="100%">
+
+#### PLL1
+
+PLL1 uses **Primary Oscillator/External Clock** (8 MHz) as its clock source. PLLPRE = 1 and PLLFBDIV = 200 give a 1600 MHz VCO; the VCO divider (INTDIV = 2) gives 400 MHz, and POSTDIV1 = 4 / POSTDIV2 = 2 give the 200 MHz PLL1 output.
+
+<img src="assets/MCC/clock_pll.png" alt="Clock PLL" title="MCC Clock PLL configuration - External Clock source" width="80%">
+
+#### Clock Generators
+
+The remaining clock generators are unchanged and derive from PLL1:
 
 <img src="assets/MCC/clock_system.png" alt="Clock System" title="MCC System clock configuration" width="50%">
 
@@ -68,29 +82,35 @@ External Input Clock Source is **None**. System clock: 200 MHz FCY. Peripheral c
 
 <img src="assets/MCC/clock_dac.png" alt="Clock DAC" title="MCC DAC clock configuration" width="50%">
 
-<img src="assets/MCC/clock_spi.png" alt="Clock SPI" title="MCC SPI clock configuration" width="50%">
-
 <img src="assets/MCC/clock_ccp.png" alt="Clock CCP" title="MCC CCP clock configuration" width="50%">
 
-### SPI1
+### CAN1
 
-SPI1 at 20 MHz communicates with the LAN8651 10BASE-T1S MAC-PHY.
+CAN1 carries the X2Cscope communication (see `src/X2Cscope/X2CscopeComm.c`). The CAN clock (FCAN) is 20 MHz from **Clock Generator 10**, which derives from PLL1 and therefore from the external 8 MHz MEMS oscillator.
 
-<img src="assets/MCC/spi.png" alt="SPI1 Configuration" title="MCC SPI1 configuration" width="50%">
+<img src="assets/MCC/can1.png" alt="CAN1 Configuration" title="MCC CAN1 - clock, bit rate, general and FIFO settings" width="80%">
 
-### DMA (DMA0 / DMA1)
+| Setting | Value |
+|---------|-------|
+| FCAN | 20 MHz (Clock Generator 10) |
+| Nominal bit rate | 500 kbit/s, 40 TQ, sample point 80% (Sync 1 TQ, TSEG1 31 TQ, TSEG2 8 TQ) |
+| Mode | Classic CAN 2.0, standard 11-bit IDs, no BRS, ISO CRC enabled, error interrupt driven |
+| TXQ | Custom name `CAN1_TX_TXQ`, 1 message deep, 8-byte payload, TX priority 1 — Device -> PC frames (ID `0x100`) |
+| FIFO1 | Custom name **`X2CSCOPE_RX`**, RX, 8 messages deep, 8-byte payload — PC -> Device frames (ID `0x110`) |
+| FIFO2 / FIFO3 | Not used |
+| Pins | CAN1TX = RC11 (RP44), CAN1RX = RC10 (RP43) via PPS |
 
-DMA channels 0 and 1 provide TX/RX acceleration for zero-copy TC6 frame transfers between SPI1 and the LAN8651.
+<img src="assets/MCC/can2.png" alt="CAN1 Filter 0" title="MCC CAN1 - Filter 0 routed to FIFO1" width="100%">
 
-<img src="assets/MCC/dma0.png" alt="DMA0 Configuration" title="MCC DMA Channel 0 configuration" width="50%">
+**Filter 0** is enabled and routed to FIFO1 with message ID `0x110`.
 
-<img src="assets/MCC/dma1.png" alt="DMA1 Configuration" title="MCC DMA Channel 1 configuration" width="50%">
+Notes on how the firmware uses this configuration:
 
-### I2C3
+- The FIFO custom name **must be `X2CSCOPE_RX`** — `X2CscopeComm.c` uses it directly and the build fails with an `#error` if it is missing.
+- **Filter 0 is reserved for X2Cscope.** `X2CscopeComm_PostInit()` reprograms its ID and mask from `X2CSCOPE_CAN_RX_ID` (exact 11-bit match, standard IDs only) and routes it to `X2CSCOPE_RX`. The ID in MCC only applies until `X2Cscope_Init()` runs; `X2CSCOPE_CAN_RX_ID` is the single source of truth.
+- Filtering is done in hardware: frames with other IDs never reach `X2CSCOPE_RX`. Frames are polled by `X2CscopeComm_Communicate()` in the main loop (no RX interrupt is used for data reception).
 
-I2C3 reads the MAC address from the EEPROM (address 0x58) on the LAN8651 Click board at startup.
-
-<img src="assets/MCC/i2c.png" alt="I2C Configuration" title="MCC I2C3 configuration" width="50%">
+> Generated driver: `mcc_generated_files/can/src/can1.c`.
 
 ### UART1
 
@@ -100,7 +120,7 @@ UART1 provides printf debug output (startup banner and status messages). Used fo
 
 ### Timers (TMR1 / SCCP1)
 
-- **TMR1** — System tick timer (10 µs resolution) for non-real-time timing (LED heartbeat, button debounce, lwIP timeouts)
+- **TMR1** — System tick timer (10 µs resolution) for non-real-time timing (LED heartbeat, button debounce)
 - **SCCP1** — FOC execution time measurement timer. Started/stopped around the FOC ISR to measure loop time (~15.6 µs)
 
 <img src="assets/MCC/tmr1.png" alt="TMR1 Configuration" title="MCC TMR1 — System tick timer" width="60%">

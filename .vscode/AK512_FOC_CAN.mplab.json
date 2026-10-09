@@ -1,0 +1,90 @@
+{
+    "version": "1.9",
+    "configurations": [
+        {
+            "name": "default",
+            "id": "",
+            "device": "dsPIC33AK512MC510",
+            "imagePath": "./out/AK512_FOC_CAN/default.elf",
+            "toolProperties": "default-tool-base",
+            "tool": "Curiosity/Starter Kits (PKOB4)",
+            "packs": [
+                {
+                    "name": "dsPIC33AK-MC_DFP",
+                    "version": "1.4.172",
+                    "vendor": "Microchip"
+                }
+            ],
+            "fileSet": "default",
+            "toolchain": "default-XC-DSC",
+            "userVariables": "default-uservariables"
+        }
+    ],
+    "propertyGroups": [
+        {
+            "name": "default-uservariables",
+            "type": "uservariables",
+            "properties": {}
+        },
+        {
+            "name": "default-XC-DSC",
+            "type": "toolchain",
+            "provider": "microchip.toolchains:xc-dsc@3.31.01",
+            "properties": {
+                "global.common-include-directories": [
+                    "\"src\"",
+                    "\"src/hal\"",
+                    "\"src/mc\"",
+                    "\"dsPIC33AK512MC510_MCLV48V300W_CAN\""
+                ],
+                "compiler.isolate-each-function": true,
+                "compiler.optimization-level": "3",
+                "compiler.place-data-into-section": true,
+                "linker.heap-size": "4096",
+                "linker.remove-unused-sections": true,
+                "compiler++.isolate-each-function": true,
+                "compiler++.optimization-level": "-O3",
+                "compiler.keep-inline": true
+            }
+        },
+        {
+            "name": "default-tool-base",
+            "type": "tool",
+            "properties": {}
+        }
+    ],
+    "fileSets": [
+        {
+            "name": "default",
+            "files": [
+                {
+                    "include": "**/*",
+                    "exclude": "**/@(build|_build|out|cmake|.vscode)/**/*"
+                },
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/opa/src/opa3.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/opa/src/opa2.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/opa/src/opa1.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/pwm_hs/src/pwm.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/adc/src/adc1.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/system/src/config_bits.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/system/src/dmt_asm.s",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/system/src/dmt.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/adc/src/adc3.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/adc/src/adc2.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/system/src/clock.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/timer/src/tmr1.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/system/src/interrupt.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/system/src/where_was_i.s",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/system/src/traps.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/system/src/system.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/system/src/pins.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/uart/src/uart1.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/system/src/reset.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/cmp/src/cmp3.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/timer/src/sccp1.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/mcc_generated_files/can/src/can1.c",
+                "dsPIC33AK512MC510_MCLV48V300W_CAN/main.c"
+            ]
+        }
+    ]
+}

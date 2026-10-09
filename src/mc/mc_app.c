@@ -10,7 +10,6 @@
 
 /* Hardware Abstraction Layer */
 #include "hal/mc/mc_hal.h"
-#include "MQTT/mqtt_topics_hal.h"
 
 /* Application data instance */
 MC_APP_DATA_T mcApp;
@@ -298,7 +297,6 @@ static void MC_APP_ReceivedDataProcess(MC_APP_DATA_T *pMCData)
     pMCData->runCmd = pMCData->runCmdBuffer;
     pMCData->directionCmd = pMCData->directionCmdBuffer;
 
-    if (!is_remote_control())
     {
         float potValueNormalized = ((float)pMotorInputs->measurePot / (float)MAX_ADC_COUNT);
 

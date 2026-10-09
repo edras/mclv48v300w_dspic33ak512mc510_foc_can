@@ -2,7 +2,7 @@
     "mplab.clangd.arguments": [
         "--header-insertion=never"
     ],
-    "mplab.clangd.compileCommandsDir": "${workspaceFolder}\\_build\\AK512_FOC_T1S\\default",
+    "mplab.clangd.compileCommandsDir": "${workspaceFolder}\\_build\\AK512_FOC_CAN\\default",
     "mplab.clangd.path": "c:\\Program Files\\Microchip\\xc-dsc\\v3.31.01\\bin\\xc-dsc-clangd.exe",
     "memory-inspector.debugTypes": [
         "arm-debugger",

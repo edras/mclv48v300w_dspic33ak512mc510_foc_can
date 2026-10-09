@@ -121,6 +121,12 @@ void X2Cscope_InitialiseEx(const X2Cscope_Config_t* config);
  */
 void X2CscopeComm_PostInit(void);
 
+/**
+ * @brief Poll CAN RX FIFO and drive the X2Cscope protocol engine.
+ * Call from the main/idle loop instead of X2Cscope_Communicate() directly.
+ */
+void X2CscopeComm_Communicate(void);
+
 #ifdef __cplusplus
 }
 #endif
